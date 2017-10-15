@@ -117,13 +117,6 @@ class DirectorySummary(object):
             for filename in files:
                 file_path = os.path.join(subdirectory, filename)
 
-                #try:    # Python 2 handling of directories with non-ASCII chars
-                #    file_path = file_path.decode('utf-8')
-                #except AttributeError:
-                #    pass
-                #except UnicodeDecodeError:
-                #    file_path = file_path.decode('cp1252')
-
                 # Skip over symbolic links.
                 if os.path.islink(file_path):
                     continue
