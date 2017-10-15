@@ -117,12 +117,12 @@ class DirectorySummary(object):
             for filename in files:
                 file_path = os.path.join(subdirectory, filename)
 
-                try:    # Python 2 handling of directories with non-ASCII chars
-                    file_path = file_path.decode('utf-8')
-                except AttributeError:
-                    pass
-                except UnicodeDecodeError:
-                    file_path = file_path.decode('cp1252')
+                #try:    # Python 2 handling of directories with non-ASCII chars
+                #    file_path = file_path.decode('utf-8')
+                #except AttributeError:
+                #    pass
+                #except UnicodeDecodeError:
+                #    file_path = file_path.decode('cp1252')
 
                 # Skip over symbolic links.
                 if os.path.islink(file_path):
@@ -327,6 +327,15 @@ class DirectoryBreakdownFigure(object):
 
     def format_plot(self, figure, axes, directory_labels, right_y_axis,
                     directory):
+        # handle non-ASCII characters in the directory names for Python 2
+        try:
+            decoded_directory_labels = [d.decode('utf-8')
+                                        for d in directory_labels]
+        except AttributeError: # Python 3 doesn't have decode on strings
+            pass
+        else:
+            directory_labels = decoded_directory_labels
+
         # add directories to the right of the plot
         y_ticks = numpy.arange(len(directory_labels)) + 0.5
         right_y_axis.set_yticks(y_ticks)
@@ -459,8 +468,16 @@ class DirectoryExtensionStats(object):
         #         filesize.size(self.space_allocated_to_dominating_ext,
         #                       system=filesize.si)
         #     ))
+        path = self.path
+        logger.debug(path)
+        try:    # python 2 handling of non-ASCII characters
+            path = path.decode('utf-8')
+        except AttributeError:
+            pass
+        except UnicodeDecodeError:  # unicode can't decode it; try Windows
+            path = path.decode('cp1252')
 
-        logger.debug(u'┌─────────┬─────────┬──────────────┐  ' + self.path)
+        logger.debug(u'┌─────────┬─────────┬──────────────┐  ' + path)
         for ext, portion in self.sorted_extensions.items():
             logger.debug('│ {0: ^7} │ {1: ^7} │  {2: >10}  │'.format(
                 ext,
