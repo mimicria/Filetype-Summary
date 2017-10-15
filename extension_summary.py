@@ -116,7 +116,7 @@ class DirectorySummary(object):
         for subdirectory, directory_names, files in os.walk(self.root):
 
             for filename in files:
-                file_path = os.path.join(subdirectory, filename)
+                file_path = os.path.join(subdirectory, filename).decode('utf-8')
 
                 # Skip over symbolic links.
                 if os.path.islink(file_path):
@@ -323,7 +323,6 @@ class DirectoryBreakdownFigure(object):
         # add directories to the right of the plot
         y_ticks = numpy.arange(len(directory_labels)) + 0.5
         right_y_axis.set_yticks(y_ticks)
-        logger.debug(directory_labels)
         right_y_axis.set_yticklabels(
             directory_labels,)
             # backgroundcolor=[next(self.background_color_wheel)
@@ -362,7 +361,7 @@ class DirectoryBreakdownFigure(object):
             #  located on the same y height
             num_bars = len(bar_widths)
             y_vals = numpy.zeros(num_bars) + y_val + .5
-            right_y_axis.barh(bottom=y_vals,
+            right_y_axis.barh(y=y_vals,
                               width=bar_widths,
                               height=1,
                               left=bar_offsets,
@@ -454,7 +453,7 @@ class DirectoryExtensionStats(object):
         #                       system=filesize.si)
         #     ))
 
-        logger.debug('┌─────────┬─────────┬──────────────┐  ' + self.path)
+        logger.debug(u'┌─────────┬─────────┬──────────────┐  ' + self.path)
         for ext, portion in self.sorted_extensions.items():
             logger.debug('│ {0: ^7} │ {1: ^7} │  {2: >10}  │'.format(
                 ext,
@@ -462,7 +461,7 @@ class DirectoryExtensionStats(object):
                 humanize.naturalsize(sum(self.extension_stats[ext]),
                                      binary=True)
             ))
-        logger.debug('└─────────┴─────────┴──────────────┘')
+        logger.debug(u'└─────────┴─────────┴──────────────┘')
 
     def sort_extensions(self):
         ext_portion_pair = map(lambda x: (x, len(self.extension_stats[x])),
@@ -509,8 +508,7 @@ class CommandLineHorizontalPlot(object):
         ]) + '\n'
         """
         plot_content = '\n'.join(plot_content)
-        print(plot_content)
-
+        logger.info(plot_content)
 
     def generate_title(self, title):
         title = '{margin}   {title}'.format(
