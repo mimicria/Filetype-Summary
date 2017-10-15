@@ -3,7 +3,9 @@
 """
 SYNOPSIS
 
-	python files_in_there_but_not_here.py [-h,--help] [-v,--verbose]
+	python extension_summary.py [-x .EXT [.EXT ...]] [--skip-report]
+	                            [-h,--help] [-v,--verbose]
+	                            DIRECTORY
 
 
 DESCRIPTION
@@ -14,7 +16,12 @@ DESCRIPTION
 
 ARGUMENTS
 
-	-h, --help	        show this help message and exit
+	-h, --help                       Show this help message and exit
+	--skip-report                    Skip creation of PDF report
+	-x [.EXT [.EXT ...]]
+	--extensions [.EXT [.EXT ...]]   Extensions to focus on, ignoring 
+	                                   all others. Make sure they are 
+	                                   lower case!
 	-v, --verbose       verbose output
 
 
@@ -34,22 +41,26 @@ TODO
     target directory communicates with the walkers of the other directories.
 
 """
-import math
-import humanize
-from lib.lineheaderpadded import hr
-
 __appname__ = 'files_in_there_but_not_here'
 __version__ = '0.0pre0'
 __license__ = 'GNU GPLv3'
 __indev__ = True
+
+import math
+import humanize
+from PyPDF2 import PdfFileMerger, PdfFileReader
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy
 
 import argparse
 from datetime import datetime
 import sys
 import os
 import collections
-import logging
 import itertools
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +68,7 @@ logger = logging.getLogger(__name__)
 def main(args):
     summary = DirectorySummary(root=args.target)
     summary.walk(valid_extensions=args.targeted_extensions)
-    summary.print(to_file='extensions_summary.txt')
+    summary.printinfo()
 
     if not args.skip_report:
         summary.plot()
@@ -106,6 +117,11 @@ class DirectorySummary(object):
             for filename in files:
                 file_path = os.path.join(subdirectory, filename)
 
+                try:    # Python 2 handling of directories with non-ASCII chars
+                    file_path = file_path.decode('utf-8')
+                except AttributeError:
+                    pass
+
                 # Skip over symbolic links.
                 if os.path.islink(file_path):
                     continue
@@ -141,22 +157,18 @@ class DirectorySummary(object):
 
             parent_directory = os.path.dirname(parent_directory)
 
-    def print(self, to_file=None):
+    def printinfo(self):
         cli_plot = CommandLineHorizontalPlot(data=self.file_type_sizes)
         cli_plot.plot(
             title='Space Allocation per Extension: {}'.format(self.root),
             max_value=self.total_size,
             aggregate_fn=sum,
             value_fmt_fn=lambda x: humanize.naturalsize(x, binary=True)
-                                           .rjust(4),
-            to_file=to_file
-        )
+                                           .rjust(4))
         cli_plot.plot(
             title='File Counts per Extension: {}'.format(self.root),
             max_value= self.num_files,
-            aggregate_fn=len,
-            to_file=to_file
-        )
+            aggregate_fn=len)
 
 
     def plot(self):
@@ -169,7 +181,7 @@ class DirectorySummary(object):
                                             extension_stats=extension_stats)
             dominating_extensions[stats.dominating_ext].append(stats)
 
-        logger.debug(hr('Dominating Extentions'))
+        logger.debug('{:=^80}'.format('Dominating Extentions'))
         for extension in list(dominating_extensions.keys()):
             ext_stats = dominating_extensions[extension]
             if not ext_stats:
@@ -180,13 +192,14 @@ class DirectorySummary(object):
                 key=lambda stats: stats.proportion_files_with_dominating_ext,
                 reverse=True)
 
-            logger.debug(hr(extension, '-'))
+            logger.debug('{:-^80}'.format(extension))
+
             for stats in ext_stats:
                 stats.sort_extensions()
                 stats.summary()
 
         # Print out summary of the walked directories
-        logger.info(hr('Summary'))
+        logger.info('{:=^80}'.format('Summary'))
 
         num_unique_extensions = len(self.file_type_sizes)
         logger.info('Number of unique extension: {}'.format(
@@ -213,14 +226,19 @@ class DirectorySummary(object):
         report_pages = []
 
         logger.info('{} pages will be created'.format(
-            int(math.ceil(num_subdirectories/max_stats_per_page)+1)))
+            int(math.ceil(num_subdirectories/float(max_stats_per_page))+1)))
 
         report_directory = 'report_pages'
         file_extension_report_path = os.path.join(report_directory,
                                                   'filetype_breakdown.pdf')
         logger.info('File type report will be stored in "{}"'.format(
             file_extension_report_path))
-        os.makedirs(report_directory, exist_ok=True)
+
+        try:              # python 3
+            os.makedirs(report_directory, exist_ok=True)
+        except TypeError: # python 2
+            if not os.path.isdir(report_directory):
+              os.makedirs(report_directory)
 
         for ext, ext_stats_by_dominating_stats in dominating_extensions.items():
 
@@ -266,8 +284,6 @@ class DirectorySummary(object):
                       walked_directory=self.root)
             report_pages.append(report_filename)
 
-        from PyPDF2 import PdfFileMerger, PdfFileReader
-
         merger = PdfFileMerger()
         for filename in report_pages:
             merger.append(PdfFileReader(open(filename, 'rb')))
@@ -279,10 +295,6 @@ class DirectorySummary(object):
             os.remove(filename)
 
 
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import numpy
 class DirectoryBreakdownFigure(object):
     bar_colors = {}
     #background_color_wheel = itertools.cycle(['#00000000', '#11111100'])
@@ -295,8 +307,8 @@ class DirectoryBreakdownFigure(object):
 
     def plot(self, save_to, walked_directory):
         logger.debug('Creating page: {}'.format(save_to))
-        verticle_space = int(self.plot_height/6)
-        horizontal_space = int(self.margin_width/10) + 3
+        verticle_space = int(self.plot_height/6.)
+        horizontal_space = int(self.margin_width/10.) + 3
 
         logger.debug('Verticle space:   {}'.format(verticle_space))
         logger.debug('Horizontal space: {}'.format(horizontal_space))
@@ -354,7 +366,7 @@ class DirectoryBreakdownFigure(object):
             #  located on the same y height
             num_bars = len(bar_widths)
             y_vals = numpy.zeros(num_bars) + y_val + .5
-            right_y_axis.barh(bottom=y_vals,
+            right_y_axis.barh(y=y_vals,
                               width=bar_widths,
                               height=1,
                               left=bar_offsets,
@@ -435,7 +447,7 @@ class DirectoryExtensionStats(object):
                                        ext_count_pairs))
         # record the proportion of files within this directory that have the
         # dominating extension
-        proportion = count / self.num_files_within_dir
+        proportion = count / float(self.num_files_within_dir)
         return ext, count, space, proportion
 
     def summary(self):
@@ -446,15 +458,15 @@ class DirectoryExtensionStats(object):
         #                       system=filesize.si)
         #     ))
 
-        logger.debug('┌─────────┬─────────┬────────┐  ' + self.path)
+        logger.debug(u'┌─────────┬─────────┬──────────────┐  ' + self.path)
         for ext, portion in self.sorted_extensions.items():
-            logger.debug('│ {0: ^7} │ {1: ^7} │  {2: >4}  │'.format(
+            logger.debug('│ {0: ^7} │ {1: ^7} │  {2: >10}  │'.format(
                 ext,
                 '{:.1%}'.format(portion),
                 humanize.naturalsize(sum(self.extension_stats[ext]),
                                      binary=True)
             ))
-        logger.debug('└─────────┴─────────┴────────┘')
+        logger.debug(u'└─────────┴─────────┴──────────────┘')
 
     def sort_extensions(self):
         ext_portion_pair = map(lambda x: (x, len(self.extension_stats[x])),
@@ -464,8 +476,7 @@ class DirectoryExtensionStats(object):
                                   reverse=True)
         sorted_extensions = collections.OrderedDict()
         for ext, portion in ext_portion_pair:
-            sorted_extensions[ext] = portion/self.num_files_within_dir
-
+            sorted_extensions[ext] = portion/float(self.num_files_within_dir)
             self.sorted_extensions = sorted_extensions
 
     def __iter__(self):
@@ -502,13 +513,12 @@ class CommandLineHorizontalPlot(object):
         ]) + '\n'
         """
         plot_content = '\n'.join(plot_content)
-        print(plot_content)
+        logger.info(plot_content)
 
         if to_file:
             with open(to_file, 'a') as f:
                 f.write(plot_content)
                 f.write('\n')
-
 
     def generate_title(self, title):
         title = '{margin}   {title}'.format(
@@ -541,7 +551,7 @@ class CommandLineHorizontalPlot(object):
             reverse=True
         )
         for key, value in sorted_and_aggregated_data:
-            percentage = value / max_value
+            percentage = value / float(max_value)
             percentage_string = '{:.1%}'.format(percentage)\
                                         .rjust(5)
             formatted_value = value_fmt_fn(value)
@@ -562,7 +572,6 @@ class CommandLineHorizontalPlot(object):
         return padded_data_line
 
 
-
 def setup_logger(args):
     logger.setLevel(logging.DEBUG)
     # create file handler which logs even debug messages
@@ -581,7 +590,7 @@ def setup_logger(args):
 
     # create formatter and add it to the handlers
     line_numbers_and_function_name = logging.Formatter(
-        "%(levelname)s [%(filename)s:%(lineno)s - %(funcName)20s() ] "
+        "%(levelname)s [ %(filename)s::%(funcName)s():%(lineno)s ] "
         "%(message)s")
     fh.setFormatter(line_numbers_and_function_name)
     # ch.setFormatter(line_numbers_and_function_name)
