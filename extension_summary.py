@@ -121,6 +121,8 @@ class DirectorySummary(object):
                     file_path = file_path.decode('utf-8')
                 except AttributeError:
                     pass
+                except UnicodeDecodeError:
+                    file_path = file_path.decode('cp1252')
 
                 # Skip over symbolic links.
                 if os.path.islink(file_path):
