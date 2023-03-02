@@ -48,7 +48,7 @@ __indev__ = True
 
 import math
 import humanize
-from PyPDF2 import PdfFileMerger, PdfFileReader
+from PyPDF2 import PdfMerger, PdfReader
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -279,9 +279,9 @@ class DirectorySummary(object):
                       walked_directory=self.root)
             report_pages.append(report_filename)
 
-        merger = PdfFileMerger()
+        merger = PdfMerger()
         for filename in report_pages:
-            merger.append(PdfFileReader(open(filename, 'rb')))
+            merger.append(PdfReader(open(filename, 'rb')))
 
 
         merger.write(file_extension_report_path)
